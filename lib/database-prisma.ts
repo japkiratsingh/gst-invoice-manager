@@ -80,7 +80,7 @@ export class DatabaseService {
               igst_18: invoice.gstBreakup.igst_18,
               igst_12: invoice.gstBreakup.igst_12,
               igst_5: invoice.gstBreakup.igst_5,
-              igst_3: invoice.gstBreakup.igst_3,
+              igst_3: invoice.gstBreakup.igst_3
             })
           }
         },
