@@ -189,7 +189,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
           items.push({
             id: itemId.toString(),
             amount: basicAmount,
-            taxType: "CGST_SGST",
+            taxType: "CGST_SGST" as const,
             taxRate: rate as 28 | 18 | 12 | 5 | 3,
             inclusive: false,
           })
@@ -213,7 +213,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
           items.push({
             id: itemId.toString(),
             amount: basicAmount,
-            taxType: "IGST",
+            taxType: "IGST" as const,
             taxRate: rate as 28 | 18 | 12 | 5 | 3,
             inclusive: false,
           })
@@ -240,7 +240,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
         items.push({
           id: "1",
           amount: amount,
-          taxType: "CGST_SGST",
+          taxType: "CGST_SGST" as const,
           taxRate: taxRate,
           inclusive: inclusive,
         })
