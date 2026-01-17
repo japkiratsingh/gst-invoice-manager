@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Invoice {
+  id          Int      @id @default(autoincrement())
+  type        String   // "sale" or "purchase"
+  date        String   // Invoice date
+  invoiceNo   String   @unique // Invoice number
+  party       String   // Party name
+  gstNumber   String?  // GST number (optional)
+  basicAmount Float    // Basic amount before tax
+  totalAmount Float    // Total amount including tax
+  isCancelled Boolean  @default(false)
+  cancelledAt String?  // Cancellation date
+  cancelledReason String? // Cancellation reason
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  // Relations
+  items     InvoiceItem[]
+  gstBreakup GSTBreakup?
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id        Int     @id @default(autoincrement())
+  invoiceId Int     // Foreign key to Invoice
+  amount    Float   // Item amount
+  taxType   String  // "CGST_SGST" or "IGST"
+  taxRate   Int     // Tax rate (28, 18, 12, 5, 3)
+  inclusive Boolean @default(false) // Whether tax is inclusive
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model GSTBreakup {
+  id        Int   @id @default(autoincrement())
+  invoiceId Int   @unique // Foreign key to Invoice
+  cgst_14   Float @default(0)
+  sgst_14   Float @default(0)
+  cgst_9    Float @default(0)
+  sgst_9    Float @default(0)
+  cgst_6    Float @default(0)
+  sgst_6    Float @default(0)
+  cgst_2_5  Float @default(0)
+  sgst_2_5  Float @default(0)
+  cgst_1_5  Float @default(0)
+  sgst_1_5  Float @default(0)
+  igst_28   Float @default(0)
+  igst_18   Float @default(0)
+  igst_12   Float @default(0)
+  igst_5    Float @default(0)
+  igst_3    Float @default(0)
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("gst_breakup")
+}
