@@ -34,7 +34,7 @@ export default function InvoiceForm({
 }: InvoiceFormProps) {
   // Update the state initialization
   const [items, setItems] = useState<TaxItem[]>([
-    { id: "1", amount: 0, taxType: "CGST_SGST", taxRate: 18, inclusive: false },
+    { id: "1", amount: 0, taxType: "CGST_SGST", taxRate: 18, inclusive: true },
   ])
 
   const [formData, setFormData] = useState({
