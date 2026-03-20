@@ -1,6 +1,10 @@
 import type { TaxItem, GSTBreakup } from "./types"
 
-export function calculateTax(items: TaxItem[]) {
+export function calculateTax(items: TaxItem[]): {
+  basicAmount: number
+  totalAmount: number
+  gstBreakup: GSTBreakup
+} {
   let totalBasicAmount = 0
   let totalAmount = 0
 

@@ -24,6 +24,18 @@ interface InvoiceFormProps {
   submitting?: boolean
 }
 
+function getFiscalYear(dateString: string): string {
+  const date = new Date(dateString)
+  const month = date.getMonth() // 0-indexed (0=Jan, 3=Apr)
+  const year = date.getFullYear()
+  if (month >= 3) {
+    return `${year}-${year + 1}`
+  }
+  return `${year - 1}-${year}`
+}
+
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
+
 export default function InvoiceForm({
   onSubmit,
   onCancel,
@@ -32,7 +44,6 @@ export default function InvoiceForm({
   existingInvoices,
   submitting = false,
 }: InvoiceFormProps) {
-  // Update the state initialization
   const [items, setItems] = useState<TaxItem[]>([
     { id: "1", amount: 0, taxType: "CGST_SGST", taxRate: 18, inclusive: true },
   ])
@@ -213,7 +224,15 @@ export default function InvoiceForm({
       return
     }
 
-    // Add validation for items
+    if (formData.gstNumber && !GST_REGEX.test(formData.gstNumber.toUpperCase())) {
+      toast({
+        title: "Invalid GST Number",
+        description: "GST number must be a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (items.length === 0 || items.every((item) => item.amount <= 0)) {
       toast({
         title: "Validation Error",
@@ -223,8 +242,8 @@ export default function InvoiceForm({
       return
     }
 
-    // Format the full invoice number
-    const fullInvoiceNumber = `2025-2026/${formData.invoicePrefix.toUpperCase()}`
+    const fiscalYear = getFiscalYear(formData.date)
+    const fullInvoiceNumber = `${fiscalYear}/${formData.invoicePrefix.toUpperCase()}`
 
     // Check for duplicate invoice numbers (excluding current invoice when editing)
     const isDuplicate = existingInvoices.some(
@@ -296,7 +315,7 @@ export default function InvoiceForm({
             <div>
               <Label htmlFor="invoicePrefix">Invoice Number *</Label>
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-2 rounded border">2025-2026/</span>
+                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-2 rounded border">{getFiscalYear(formData.date)}/</span>
                 <Input
                   id="invoicePrefix"
                   value={formData.invoicePrefix}

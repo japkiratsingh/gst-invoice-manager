@@ -315,7 +315,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
       .filter((p) => p.isValid)
       .map((p) => ({
         ...p.data,
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: crypto.randomUUID(),
       })) as Invoice[]
 
     if (validInvoices.length === 0) {
@@ -428,49 +428,16 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
             </div>
 
             {/* Format Guide */}
-            <Card className="bg-green-50 border-green-200">
-              <CardHeader>
-                <CardTitle className="text-lg text-green-800">✅ Your CSV Format is Perfectly Supported!</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm space-y-2">
-                  <p className="font-medium text-green-700">Exact column mapping detected:</p>
-                  <div className="grid grid-cols-2 gap-2 text-green-600">
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>DATE ✅</li>
-                      <li>INVOICE NO. ✅</li>
-                      <li>PARTY ✅</li>
-                      <li>BASIC AMOUNT ✅</li>
-                      <li>CGST (14%) ✅</li>
-                      <li>SGST (14%) ✅</li>
-                      <li>CGST (9%) ✅</li>
-                      <li>SGST (9%) ✅</li>
-                      <li>CGST (6%) ✅</li>
-                      <li>SGST (6%) ✅</li>
-                    </ul>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>CGST (2.5%) ✅</li>
-                      <li>SGST (2.5%) ✅</li>
-                      <li>CGST (1.5%) ✅</li>
-                      <li>SGST (1.5%) ✅</li>
-                      <li>IGST (28%) ✅</li>
-                      <li>IGST (18%) ✅</li>
-                      <li>IGST (12%) ✅</li>
-                      <li>IGST (5%) ✅</li>
-                      <li>IGST (3%) ✅</li>
-                      <li>TOTAL AMOUNT ✅</li>
-                    </ul>
-                  </div>
-                  <div className="mt-3 p-2 bg-green-100 rounded">
-                    <p className="text-green-800 font-medium">
-                      🎯 Perfect match for your MAY_CSV_converted.csv format!
-                    </p>
-                    <p className="text-green-700 text-xs mt-1">
-                      • Automatically skips header rows (DATE=MAY) • Filters out summary rows (PARTY=TOTAL) • Handles
-                      all GST tax rates and types • Creates multiple tax items for complex invoices
-                    </p>
-                  </div>
-                </div>
+            <Card className="bg-gray-50 border-gray-200">
+              <CardContent className="pt-6">
+                <p className="font-medium text-sm mb-2">Expected CSV columns:</p>
+                <p className="text-xs text-gray-600">
+                  DATE, INVOICE NO., PARTY, BASIC AMOUNT, CGST/SGST columns (14%, 9%, 6%, 2.5%, 1.5%),
+                  IGST columns (28%, 18%, 12%, 5%, 3%), TOTAL AMOUNT
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Dates can be DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD. Download the sample template for the exact format.
+                </p>
               </CardContent>
             </Card>
           </div>

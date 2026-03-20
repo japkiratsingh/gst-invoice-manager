@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, ShoppingCart, Receipt, Upload, Database } from "lucide-react"
+import { Plus, ShoppingCart, Receipt, Upload } from "lucide-react"
 import InvoiceTypeSelector from "@/components/invoice-type-selector"
 import InvoiceForm from "@/components/invoice-form"
 import InvoiceTable from "@/components/invoice-table"
@@ -40,9 +40,6 @@ export default function GST_InvoiceManager() {
 
       setSaleInvoices(saleData)
       setPurchaseInvoices(purchaseData)
-      console.log(
-        `Loaded ${saleData.length} sale invoices and ${purchaseData.length} purchase invoices from localStorage`,
-      )
     } catch (error) {
       console.error("Error loading invoices:", error)
       toast({
@@ -275,7 +272,7 @@ export default function GST_InvoiceManager() {
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center">GST Invoice Manager</CardTitle>
             <CardDescription className="text-center">
-              Frontend-only CSV import/export with localStorage persistence and DD-MM-YYYY date formatting
+              Manage sale &amp; purchase invoices with GST breakup, CSV import/export
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center gap-4 flex-wrap">
@@ -299,18 +296,6 @@ export default function GST_InvoiceManager() {
             </Button>
 
             <FrontendExport />
-          </CardContent>
-        </Card>
-
-        {/* Storage Status */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="text-sm text-blue-800 text-center">
-              <span className="inline-flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                Frontend-only with localStorage - All data persisted locally with DD-MM-YYYY formatting
-              </span>
-            </div>
           </CardContent>
         </Card>
 
@@ -400,36 +385,51 @@ export default function GST_InvoiceManager() {
         )}
 
         {/* Summary */}
-        {!showForm && !showTypeSelector && !showCSVImport && totalInvoices > 0 && (
+        {!showForm && !showTypeSelector && !showCSVImport && currentInvoices.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Summary - {activeTab === "sale" ? "Sale" : "Purchase"} Invoices</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="font-medium">Total Invoices</p>
-                  <p className="text-2xl font-bold">{currentInvoices.length}</p>
-                </div>
-                <div>
-                  <p className="font-medium">Total Amount</p>
-                  <p className="text-2xl font-bold">
-                    ₹{currentInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-medium">Total Basic Amount</p>
-                  <p className="text-2xl font-bold">
-                    ₹{currentInvoices.reduce((sum, inv) => sum + inv.basicAmount, 0).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-medium">Total Tax</p>
-                  <p className="text-2xl font-bold">
-                    ₹{currentInvoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.basicAmount), 0).toFixed(2)}
-                  </p>
-                </div>
-              </div>
+              {(() => {
+                const active = currentInvoices.filter((inv) => !inv.isCancelled)
+                const cancelled = currentInvoices.filter((inv) => inv.isCancelled)
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium">Active / Cancelled</p>
+                      <p className="text-2xl font-bold">
+                        {active.length}{" "}
+                        <span className="text-sm font-normal text-gray-500">/ {cancelled.length} cancelled</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Basic Amount</p>
+                      <p className="text-2xl font-bold">
+                        ₹{active.reduce((sum, inv) => sum + inv.basicAmount, 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Total Tax</p>
+                      <p className="text-2xl font-bold">
+                        ₹{active.reduce((sum, inv) => sum + (inv.totalAmount - inv.basicAmount), 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Total Amount</p>
+                      <p className="text-2xl font-bold text-green-700">
+                        ₹{active.reduce((sum, inv) => sum + inv.totalAmount, 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium">All Invoices</p>
+                      <p className="text-2xl font-bold">
+                        {saleInvoices.length} sale / {purchaseInvoices.length} purchase
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         )}

@@ -31,7 +31,7 @@ export class LocalStorageService {
   // Add new invoice
   addInvoice(invoice: Invoice): void {
     const invoices = this.getInvoices(invoice.type)
-    const newInvoice = { ...invoice, id: Date.now().toString() }
+    const newInvoice = { ...invoice, id: crypto.randomUUID() }
     invoices.push(newInvoice)
     this.saveInvoices(invoice.type, invoices)
   }
@@ -53,7 +53,7 @@ export class LocalStorageService {
           })
         } else {
           this.addInvoice(invoice)
-          results.successful.push({ ...invoice, id: Date.now().toString() })
+          results.successful.push({ ...invoice, id: crypto.randomUUID() })
         }
       } catch (error) {
         results.failed.push({
