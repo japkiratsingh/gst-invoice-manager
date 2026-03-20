@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Edit, Trash2, Eye, EyeOff, Ban, Search, ArrowUpDown } from "lucide-react"
+import { Edit, Trash2, Eye, EyeOff, Ban, Search, ArrowUpDown, Loader2 } from "lucide-react"
 import type { Invoice, InvoiceType } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 
@@ -15,12 +15,15 @@ interface InvoiceTableProps {
   onDelete: (id: string) => void
   onCancel: (id: string) => void
   invoiceType: InvoiceType
+  isLoading?: boolean
+  isDeleting?: boolean
+  isCancelling?: boolean
 }
 
 type SortField = "date" | "invoiceNo" | "party" | "basicAmount" | "totalAmount"
 type SortDir = "asc" | "desc"
 
-export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, invoiceType }: InvoiceTableProps) {
+export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, invoiceType, isLoading, isDeleting, isCancelling }: InvoiceTableProps) {
   const [showAllColumns, setShowAllColumns] = useState(false)
   const [search, setSearch] = useState("")
   const [sortField, setSortField] = useState<SortField>("date")
@@ -84,7 +87,9 @@ export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, inv
     )
   }, [filtered])
 
-  if (invoices.length === 0) {
+  const actionDisabled = isDeleting || isCancelling
+
+  if (invoices.length === 0 && !isLoading) {
     return (
       <Card>
         <CardContent className="text-center py-8">
@@ -148,7 +153,12 @@ export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, inv
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className={`overflow-x-auto relative ${isLoading ? "opacity-60" : ""}`}>
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/50">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -220,17 +230,17 @@ export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, inv
                         size="sm"
                         variant="outline"
                         onClick={() => onEdit(invoice)}
-                        disabled={invoice.isCancelled}
+                        disabled={invoice.isCancelled || actionDisabled}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       {!invoice.isCancelled && (
-                        <Button size="sm" variant="outline" onClick={() => handleCancel(invoice.id, invoice.invoiceNo)}>
-                          <Ban className="h-4 w-4" />
+                        <Button size="sm" variant="outline" onClick={() => handleCancel(invoice.id, invoice.invoiceNo)} disabled={actionDisabled}>
+                          {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => handleDelete(invoice.id, invoice.invoiceNo)}>
-                        <Trash2 className="h-4 w-4" />
+                      <Button size="sm" variant="outline" onClick={() => handleDelete(invoice.id, invoice.invoiceNo)} disabled={actionDisabled}>
+                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </div>
                   </TableCell>

@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, ShoppingCart, Receipt, Upload } from "lucide-react"
+import { Plus, ShoppingCart, Receipt, Upload, Loader2, AlertCircle } from "lucide-react"
 import InvoiceTypeSelector from "@/components/invoice-type-selector"
 import InvoiceForm from "@/components/invoice-form"
 import InvoiceTable from "@/components/invoice-table"
@@ -11,13 +11,21 @@ import CSVImportFrontend from "@/components/csv-import-frontend"
 import FrontendExport from "@/components/frontend-export"
 import MonthSelector from "@/components/month-selector"
 import type { Invoice, InvoiceType } from "@/lib/types"
-import { apiClient, type MonthEntry, type SummaryData } from "@/lib/api-client"
+import {
+  useInvoices,
+  useMonths,
+  useSummary,
+  useCreateInvoice,
+  useUpdateInvoice,
+  useDeleteInvoice,
+  useCancelInvoice,
+} from "@/hooks/use-invoices"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 
+const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
 export default function GST_InvoiceManager() {
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [months, setMonths] = useState<MonthEntry[]>([])
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [showTypeSelector, setShowTypeSelector] = useState(false)
@@ -26,67 +34,30 @@ export default function GST_InvoiceManager() {
   const [currentInvoiceType, setCurrentInvoiceType] = useState<InvoiceType | null>(null)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const [activeTab, setActiveTab] = useState<InvoiceType>("sale")
-  const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState<SummaryData | null>(null)
 
   const { toast } = useToast()
 
-  const loadMonths = useCallback(async () => {
-    try {
-      const data = await apiClient.getMonths()
-      setMonths(data)
-      return data
-    } catch (error) {
-      console.error("Error loading months:", error)
-      return []
-    }
-  }, [])
+  // React Query hooks
+  const invoiceParams = {
+    type: activeTab,
+    ...(selectedMonth !== null && selectedYear !== null ? { month: selectedMonth, year: selectedYear } : {}),
+  }
 
-  const loadInvoices = useCallback(async () => {
-    try {
-      setLoading(true)
-      const params: { type: string; month?: number; year?: number } = { type: activeTab }
-      if (selectedMonth !== null && selectedYear !== null) {
-        params.month = selectedMonth
-        params.year = selectedYear
-      }
-      const data = await apiClient.getInvoices(params)
-      setInvoices(data)
+  const { data: invoices = [], isLoading, isError, error, isFetching } = useInvoices(invoiceParams)
+  const { data: months = [] } = useMonths()
+  const { data: summary } = useSummary(invoiceParams)
 
-      // Load summary
-      const summaryData = await apiClient.getSummary(params)
-      setSummary(summaryData)
-    } catch (error) {
-      console.error("Error loading invoices:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load invoices from server",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [activeTab, selectedMonth, selectedYear, toast])
+  const createMutation = useCreateInvoice()
+  const updateMutation = useUpdateInvoice()
+  const deleteMutation = useDeleteInvoice()
+  const cancelMutation = useCancelInvoice()
 
-  useEffect(() => {
-    loadMonths()
-  }, [loadMonths])
+  const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || cancelMutation.isPending
 
-  useEffect(() => {
-    loadInvoices()
-  }, [loadInvoices])
-
+  // Handlers
   const handleMonthChange = (month: number | null, year: number | null) => {
     setSelectedMonth(month)
     setSelectedYear(year)
-  }
-
-  const handleAddNewInvoice = () => {
-    setShowTypeSelector(true)
-  }
-
-  const handleImportCSV = () => {
-    setShowCSVImport(true)
   }
 
   const handleInvoiceTypeSelect = (type: InvoiceType) => {
@@ -99,54 +70,46 @@ export default function GST_InvoiceManager() {
   const handleAddInvoice = async (invoice: Invoice) => {
     try {
       if (editingInvoice) {
-        await apiClient.updateInvoice(editingInvoice.id, invoice)
+        await updateMutation.mutateAsync({ id: editingInvoice.id, invoice })
         setEditingInvoice(null)
         toast({
           title: "Invoice Updated",
-          description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been updated successfully.`,
+          description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} updated.`,
         })
       } else {
-        await apiClient.createInvoice(invoice)
+        await createMutation.mutateAsync(invoice)
         toast({
           title: "Invoice Added",
-          description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been added successfully.`,
+          description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} added.`,
         })
       }
-
       setShowForm(false)
       setCurrentInvoiceType(null)
       setActiveTab(invoice.type)
-      await loadInvoices()
-      await loadMonths()
-    } catch (error) {
-      console.error("Error saving invoice:", error)
+    } catch (err) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save invoice",
+        description: err instanceof Error ? err.message : "Failed to save invoice",
         variant: "destructive",
       })
     }
   }
 
-  const handleCSVImportComplete = async (results: { successful: Invoice[]; failed: { invoice: Invoice; error: string }[] }) => {
+  const handleCSVImportComplete = (results: { successful: Invoice[]; failed: { invoice: Invoice; error: string }[] }) => {
     setShowCSVImport(false)
     setCurrentInvoiceType(null)
-
     if (results.failed.length > 0) {
       toast({
         title: "Import Completed with Errors",
-        description: `${results.successful.length} invoices imported successfully. ${results.failed.length} failed.`,
+        description: `${results.successful.length} imported, ${results.failed.length} failed.`,
         variant: "destructive",
       })
     } else {
       toast({
         title: "Import Successful",
-        description: `${results.successful.length} invoices imported successfully.`,
+        description: `${results.successful.length} invoices imported.`,
       })
     }
-
-    await loadInvoices()
-    await loadMonths()
   }
 
   const handleEditInvoice = (invoice: Invoice) => {
@@ -156,52 +119,32 @@ export default function GST_InvoiceManager() {
   }
 
   const handleDeleteInvoice = async (id: string) => {
+    const invoice = invoices.find((inv) => inv.id === id)
+    if (!invoice) return
     try {
-      const invoice = invoices.find((inv) => inv.id === id)
-      if (!invoice) return
-
-      await apiClient.deleteInvoice(id)
-
+      await deleteMutation.mutateAsync(id)
       toast({
         title: "Invoice Deleted",
-        description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been deleted.`,
+        description: `Invoice ${invoice.invoiceNo} deleted.`,
         variant: "destructive",
       })
-
-      await loadInvoices()
-      await loadMonths()
-    } catch (error) {
-      console.error("Error deleting invoice:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete invoice",
-        variant: "destructive",
-      })
+    } catch {
+      toast({ title: "Error", description: "Failed to delete invoice", variant: "destructive" })
     }
   }
 
   const handleCancelInvoice = async (id: string) => {
+    const invoice = invoices.find((inv) => inv.id === id)
+    if (!invoice) return
     try {
-      const invoice = invoices.find((inv) => inv.id === id)
-      if (!invoice) return
-
-      await apiClient.cancelInvoice(id)
-
+      await cancelMutation.mutateAsync(id)
       toast({
         title: "Invoice Cancelled",
-        description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been cancelled.`,
+        description: `Invoice ${invoice.invoiceNo} cancelled.`,
         variant: "destructive",
       })
-
-      await loadInvoices()
-      await loadMonths()
-    } catch (error) {
-      console.error("Error cancelling invoice:", error)
-      toast({
-        title: "Error",
-        description: "Failed to cancel invoice",
-        variant: "destructive",
-      })
+    } catch {
+      toast({ title: "Error", description: "Failed to cancel invoice", variant: "destructive" })
     }
   }
 
@@ -213,12 +156,33 @@ export default function GST_InvoiceManager() {
     setEditingInvoice(null)
   }
 
-  if (loading && invoices.length === 0) {
+  const isMainView = !showForm && !showTypeSelector && !showCSVImport
+
+  // Error state
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-96">
+          <CardContent className="flex flex-col items-center justify-center py-8 gap-3">
+            <AlertCircle className="h-10 w-10 text-red-500" />
+            <p className="font-medium text-red-700">Failed to connect to server</p>
+            <p className="text-sm text-gray-500 text-center">{error instanceof Error ? error.message : "Unknown error"}</p>
+            <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Initial loading state
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-96">
           <CardContent className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
             <span>Loading invoices...</span>
           </CardContent>
         </Card>
@@ -239,28 +203,23 @@ export default function GST_InvoiceManager() {
           </CardHeader>
           <CardContent className="flex justify-center gap-4 flex-wrap">
             <Button
-              onClick={handleAddNewInvoice}
+              onClick={() => setShowTypeSelector(true)}
               className="flex items-center gap-2"
-              disabled={showForm || showTypeSelector || showCSVImport}
+              disabled={!isMainView}
             >
               <Plus className="h-4 w-4" />
               Add New Invoice
             </Button>
-
             <Button
-              onClick={handleImportCSV}
+              onClick={() => setShowCSVImport(true)}
               variant="outline"
               className="flex items-center gap-2 bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
-              disabled={showForm || showTypeSelector || showCSVImport}
+              disabled={!isMainView}
             >
               <Upload className="h-4 w-4" />
               Import CSV
             </Button>
-
-            <FrontendExport
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-            />
+            <FrontendExport selectedMonth={selectedMonth} selectedYear={selectedYear} />
           </CardContent>
         </Card>
 
@@ -284,11 +243,12 @@ export default function GST_InvoiceManager() {
             editingInvoice={editingInvoice}
             invoiceType={currentInvoiceType}
             existingInvoices={invoices}
+            submitting={createMutation.isPending || updateMutation.isPending}
           />
         )}
 
         {/* Tab Navigation + Month Selector */}
-        {!showForm && !showTypeSelector && !showCSVImport && (
+        {isMainView && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -317,6 +277,10 @@ export default function GST_InvoiceManager() {
                       Purchase
                     </Button>
                   </div>
+                  {/* Inline fetching/mutating indicator */}
+                  {(isFetching || isMutating) && (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -351,24 +315,27 @@ export default function GST_InvoiceManager() {
         )}
 
         {/* Invoices Table */}
-        {!showForm && !showTypeSelector && !showCSVImport && (
+        {isMainView && (
           <InvoiceTable
             invoices={invoices}
             onEdit={handleEditInvoice}
             onDelete={handleDeleteInvoice}
             onCancel={handleCancelInvoice}
             invoiceType={activeTab}
+            isLoading={isFetching && !isLoading}
+            isDeleting={deleteMutation.isPending}
+            isCancelling={cancelMutation.isPending}
           />
         )}
 
         {/* Summary */}
-        {!showForm && !showTypeSelector && !showCSVImport && summary && summary.totalCount > 0 && (
+        {isMainView && summary && summary.totalCount > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>
                 Summary — {activeTab === "sale" ? "Sale" : "Purchase"}
                 {selectedMonth !== null && selectedYear !== null
-                  ? ` (${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][selectedMonth]} ${selectedYear})`
+                  ? ` (${MONTH_NAMES[selectedMonth]} ${selectedYear})`
                   : " (All Months)"}
               </CardTitle>
             </CardHeader>

@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Upload, FileText, X, CheckCircle, AlertCircle, Download, Eye, EyeOff } from "lucide-react"
+import { Upload, FileText, X, CheckCircle, AlertCircle, Download, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { parseCSV, formatDateToDDMMYYYY, type CSVRow } from "@/lib/csv-parser"
-import { apiClient } from "@/lib/api-client"
+import { useImportInvoices } from "@/hooks/use-invoices"
 import type { Invoice, InvoiceType } from "@/lib/types"
 
 interface CSVImportProps {
@@ -36,6 +36,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
   const [showAllColumns, setShowAllColumns] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+  const importMutation = useImportInvoices()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0]
@@ -328,7 +329,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
     }
 
     try {
-      const results = await apiClient.importInvoices(validInvoices)
+      const results = await importMutation.mutateAsync(validInvoices)
       onImportComplete(results)
     } catch (error) {
       console.error("Import error:", error)
@@ -545,10 +546,17 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={parsedData.filter((p) => p.isValid).length === 0}
+                disabled={parsedData.filter((p) => p.isValid).length === 0 || importMutation.isPending}
                 className="bg-green-600 hover:bg-green-700"
               >
-                Import {parsedData.filter((p) => p.isValid).length} Valid Records
+                {importMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>Import {parsedData.filter((p) => p.isValid).length} Valid Records</>
+                )}
               </Button>
             </div>
           </div>
