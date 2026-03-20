@@ -82,7 +82,11 @@ export default function InvoiceForm({
   // Load editing invoice data with smart GST breakup analysis
   useEffect(() => {
     if (editingInvoice) {
-      const invoicePrefix = editingInvoice.invoiceNo?.split("/").pop() || ""
+      // For purchase invoices, use the full invoice number as-is
+      // For sale invoices, extract the suffix after the fiscal year prefix
+      const invoicePrefix = invoiceType === "purchase"
+        ? editingInvoice.invoiceNo || ""
+        : editingInvoice.invoiceNo?.split("/").pop() || ""
       setFormData({
         date: editingInvoice.date || new Date().toISOString().split("T")[0],
         invoicePrefix,
@@ -224,7 +228,7 @@ export default function InvoiceForm({
       return
     }
 
-    if (formData.gstNumber && !GST_REGEX.test(formData.gstNumber.toUpperCase())) {
+    if (invoiceType === "sale" && formData.gstNumber && !GST_REGEX.test(formData.gstNumber.toUpperCase())) {
       toast({
         title: "Invalid GST Number",
         description: "GST number must be a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).",
@@ -242,8 +246,11 @@ export default function InvoiceForm({
       return
     }
 
-    const fiscalYear = getFiscalYear(formData.date)
-    const fullInvoiceNumber = `${fiscalYear}/${formData.invoicePrefix.toUpperCase()}`
+    // Purchase invoices use the number as-is (freeform from external parties)
+    // Sale invoices get the fiscal year prefix
+    const fullInvoiceNumber = invoiceType === "purchase"
+      ? formData.invoicePrefix.trim()
+      : `${getFiscalYear(formData.date)}/${formData.invoicePrefix.toUpperCase()}`
 
     // Check for duplicate invoice numbers (excluding current invoice when editing)
     const isDuplicate = existingInvoices.some(
@@ -266,7 +273,7 @@ export default function InvoiceForm({
       date: formData.date,
       invoiceNo: fullInvoiceNumber,
       party: formData.party.toUpperCase(),
-      gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : undefined,
+      gstNumber: invoiceType === "sale" && formData.gstNumber ? formData.gstNumber.toUpperCase() : undefined,
       items,
       basicAmount: calculatedData.basicAmount,
       totalAmount: calculatedData.totalAmount,
@@ -314,18 +321,29 @@ export default function InvoiceForm({
             </div>
             <div>
               <Label htmlFor="invoicePrefix">Invoice Number *</Label>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-2 rounded border">{getFiscalYear(formData.date)}/</span>
+              {invoiceType === "purchase" ? (
                 <Input
                   id="invoicePrefix"
                   value={formData.invoicePrefix}
-                  onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value.toUpperCase() })}
-                  placeholder="001"
+                  onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value })}
+                  placeholder="e.g. INV-2025/123, ABC-001, PO#456"
                   required
-                  className="flex-1"
                   disabled={submitting}
                 />
-              </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600 bg-gray-100 px-2 py-2 rounded border">{getFiscalYear(formData.date)}/</span>
+                  <Input
+                    id="invoicePrefix"
+                    value={formData.invoicePrefix}
+                    onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value.toUpperCase() })}
+                    placeholder="001"
+                    required
+                    className="flex-1"
+                    disabled={submitting}
+                  />
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="party">Party Name *</Label>
@@ -338,16 +356,18 @@ export default function InvoiceForm({
                 disabled={submitting}
               />
             </div>
-            <div>
-              <Label htmlFor="gstNumber">GST Number</Label>
-              <Input
-                id="gstNumber"
-                value={formData.gstNumber}
-                onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })}
-                placeholder="22AAAAA0000A1Z5"
-                disabled={submitting}
-              />
-            </div>
+            {invoiceType === "sale" && (
+              <div>
+                <Label htmlFor="gstNumber">GST Number</Label>
+                <Input
+                  id="gstNumber"
+                  value={formData.gstNumber}
+                  onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })}
+                  placeholder="22AAAAA0000A1Z5"
+                  disabled={submitting}
+                />
+              </div>
+            )}
           </div>
 
           {/* Tax Entries */}

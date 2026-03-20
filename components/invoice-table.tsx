@@ -82,8 +82,29 @@ export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, inv
         basicAmount: acc.basicAmount + inv.basicAmount,
         totalAmount: acc.totalAmount + inv.totalAmount,
         tax: acc.tax + (inv.totalAmount - inv.basicAmount),
+        cgst_14: acc.cgst_14 + inv.gstBreakup.cgst_14,
+        sgst_14: acc.sgst_14 + inv.gstBreakup.sgst_14,
+        cgst_9: acc.cgst_9 + inv.gstBreakup.cgst_9,
+        sgst_9: acc.sgst_9 + inv.gstBreakup.sgst_9,
+        cgst_6: acc.cgst_6 + inv.gstBreakup.cgst_6,
+        sgst_6: acc.sgst_6 + inv.gstBreakup.sgst_6,
+        cgst_2_5: acc.cgst_2_5 + inv.gstBreakup.cgst_2_5,
+        sgst_2_5: acc.sgst_2_5 + inv.gstBreakup.sgst_2_5,
+        cgst_1_5: acc.cgst_1_5 + inv.gstBreakup.cgst_1_5,
+        sgst_1_5: acc.sgst_1_5 + inv.gstBreakup.sgst_1_5,
+        igst_28: acc.igst_28 + inv.gstBreakup.igst_28,
+        igst_18: acc.igst_18 + inv.gstBreakup.igst_18,
+        igst_12: acc.igst_12 + inv.gstBreakup.igst_12,
+        igst_5: acc.igst_5 + inv.gstBreakup.igst_5,
+        igst_3: acc.igst_3 + inv.gstBreakup.igst_3,
       }),
-      { basicAmount: 0, totalAmount: 0, tax: 0 }
+      {
+        basicAmount: 0, totalAmount: 0, tax: 0,
+        cgst_14: 0, sgst_14: 0, cgst_9: 0, sgst_9: 0,
+        cgst_6: 0, sgst_6: 0, cgst_2_5: 0, sgst_2_5: 0,
+        cgst_1_5: 0, sgst_1_5: 0, igst_28: 0, igst_18: 0,
+        igst_12: 0, igst_5: 0, igst_3: 0,
+      }
     )
   }, [filtered])
 
@@ -246,19 +267,37 @@ export default function InvoiceTable({ invoices, onEdit, onDelete, onCancel, inv
                   </TableCell>
                 </TableRow>
               ))}
+              {/* Spacer row */}
+              <TableRow>
+                <TableCell colSpan={showAllColumns ? 22 : 7} className="h-4 p-0 border-none"></TableCell>
+              </TableRow>
               {/* Totals row */}
-              <TableRow className="bg-gray-100 font-bold border-t-2">
-                <TableCell colSpan={3}>TOTAL ({filtered.length} invoices)</TableCell>
-                <TableCell></TableCell>
-                <TableCell>₹{totals.basicAmount.toFixed(2)}</TableCell>
+              <TableRow className="bg-gray-200 border-t-2 border-b-2 border-gray-400 uppercase">
+                <TableCell className="font-extrabold text-base"></TableCell>
+                <TableCell className="font-extrabold text-base"></TableCell>
+                <TableCell className="font-extrabold text-base">TOTAL</TableCell>
+                <TableCell className="font-extrabold text-base"></TableCell>
+                <TableCell className="font-extrabold text-base">₹{totals.basicAmount.toFixed(2)}</TableCell>
                 {showAllColumns && (
                   <>
-                    {Array.from({ length: 15 }).map((_, i) => (
-                      <TableCell key={i}></TableCell>
-                    ))}
+                    <TableCell className="font-extrabold text-base">₹{totals.cgst_14.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.sgst_14.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.cgst_9.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.sgst_9.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.cgst_6.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.sgst_6.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.cgst_2_5.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.sgst_2_5.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.cgst_1_5.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.sgst_1_5.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.igst_28.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.igst_18.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.igst_12.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.igst_5.toFixed(2)}</TableCell>
+                    <TableCell className="font-extrabold text-base">₹{totals.igst_3.toFixed(2)}</TableCell>
                   </>
                 )}
-                <TableCell>₹{totals.totalAmount.toFixed(2)}</TableCell>
+                <TableCell className="font-extrabold text-base">₹{totals.totalAmount.toFixed(2)}</TableCell>
                 <TableCell></TableCell>
               </TableRow>
             </TableBody>
