@@ -11,7 +11,7 @@ import { Upload, FileText, X, CheckCircle, AlertCircle, Download, Eye, EyeOff } 
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { parseCSV, formatDateToDDMMYYYY, type CSVRow } from "@/lib/csv-parser"
-import { localStorageService } from "@/lib/local-storage"
+import { apiClient } from "@/lib/api-client"
 import type { Invoice, InvoiceType } from "@/lib/types"
 
 interface CSVImportProps {
@@ -310,7 +310,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
     }
   }
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const validInvoices = parsedData
       .filter((p) => p.isValid)
       .map((p) => ({
@@ -327,9 +327,17 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
       return
     }
 
-    // Use localStorage service to add invoices
-    const results = localStorageService.addInvoices(validInvoices)
-    onImportComplete(results)
+    try {
+      const results = await apiClient.importInvoices(validInvoices)
+      onImportComplete(results)
+    } catch (error) {
+      console.error("Import error:", error)
+      toast({
+        title: "Import Error",
+        description: error instanceof Error ? error.message : "Failed to import invoices",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleReset = () => {
@@ -366,7 +374,7 @@ export default function CSVImportFrontend({ onImportComplete, onCancel, invoiceT
             <Upload className="h-6 w-6 text-blue-600" />
             <div>
               <CardTitle>Import {invoiceType === "sale" ? "Sale" : "Purchase"} Invoices from CSV</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">Frontend-only CSV import with localStorage persistence</p>
+              <p className="text-sm text-gray-600 mt-1">Import invoices from CSV — auto-assigned to correct month</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={onCancel}>

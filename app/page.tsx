@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, ShoppingCart, Receipt, Upload } from "lucide-react"
@@ -9,14 +9,17 @@ import InvoiceForm from "@/components/invoice-form"
 import InvoiceTable from "@/components/invoice-table"
 import CSVImportFrontend from "@/components/csv-import-frontend"
 import FrontendExport from "@/components/frontend-export"
+import MonthSelector from "@/components/month-selector"
 import type { Invoice, InvoiceType } from "@/lib/types"
-import { localStorageService } from "@/lib/local-storage"
+import { apiClient, type MonthEntry, type SummaryData } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 
 export default function GST_InvoiceManager() {
-  const [saleInvoices, setSaleInvoices] = useState<Invoice[]>([])
-  const [purchaseInvoices, setPurchaseInvoices] = useState<Invoice[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [months, setMonths] = useState<MonthEntry[]>([])
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [showTypeSelector, setShowTypeSelector] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showCSVImport, setShowCSVImport] = useState(false)
@@ -24,36 +27,58 @@ export default function GST_InvoiceManager() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const [activeTab, setActiveTab] = useState<InvoiceType>("sale")
   const [loading, setLoading] = useState(true)
+  const [summary, setSummary] = useState<SummaryData | null>(null)
 
   const { toast } = useToast()
 
-  // Load invoices from localStorage on mount
-  useEffect(() => {
-    loadInvoices()
+  const loadMonths = useCallback(async () => {
+    try {
+      const data = await apiClient.getMonths()
+      setMonths(data)
+      return data
+    } catch (error) {
+      console.error("Error loading months:", error)
+      return []
+    }
   }, [])
 
-  const loadInvoices = () => {
+  const loadInvoices = useCallback(async () => {
     try {
       setLoading(true)
-      const saleData = localStorageService.getInvoices("sale")
-      const purchaseData = localStorageService.getInvoices("purchase")
+      const params: { type: string; month?: number; year?: number } = { type: activeTab }
+      if (selectedMonth !== null && selectedYear !== null) {
+        params.month = selectedMonth
+        params.year = selectedYear
+      }
+      const data = await apiClient.getInvoices(params)
+      setInvoices(data)
 
-      setSaleInvoices(saleData)
-      setPurchaseInvoices(purchaseData)
+      // Load summary
+      const summaryData = await apiClient.getSummary(params)
+      setSummary(summaryData)
     } catch (error) {
       console.error("Error loading invoices:", error)
       toast({
         title: "Error",
-        description: "Failed to load invoices from localStorage",
+        description: "Failed to load invoices from server",
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTab, selectedMonth, selectedYear, toast])
 
-  const getCurrentInvoices = () => {
-    return activeTab === "sale" ? saleInvoices : purchaseInvoices
+  useEffect(() => {
+    loadMonths()
+  }, [loadMonths])
+
+  useEffect(() => {
+    loadInvoices()
+  }, [loadInvoices])
+
+  const handleMonthChange = (month: number | null, year: number | null) => {
+    setSelectedMonth(month)
+    setSelectedYear(year)
   }
 
   const handleAddNewInvoice = () => {
@@ -71,32 +96,17 @@ export default function GST_InvoiceManager() {
     setShowForm(true)
   }
 
-  const handleAddInvoice = (invoice: Invoice) => {
+  const handleAddInvoice = async (invoice: Invoice) => {
     try {
       if (editingInvoice) {
-        // Update existing invoice
-        const invoices = localStorageService.getInvoices(invoice.type)
-        const updatedInvoices = invoices.map((inv) =>
-          inv.id === editingInvoice.id ? { ...invoice, id: editingInvoice.id } : inv,
-        )
-        localStorageService.saveInvoices(invoice.type, updatedInvoices)
-
-        if (invoice.type === "sale") {
-          setSaleInvoices(updatedInvoices)
-        } else {
-          setPurchaseInvoices(updatedInvoices)
-        }
-
+        await apiClient.updateInvoice(editingInvoice.id, invoice)
         setEditingInvoice(null)
         toast({
           title: "Invoice Updated",
           description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been updated successfully.`,
         })
       } else {
-        // Create new invoice
-        localStorageService.addInvoice(invoice)
-        loadInvoices() // Reload to get updated data
-
+        await apiClient.createInvoice(invoice)
         toast({
           title: "Invoice Added",
           description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been added successfully.`,
@@ -106,18 +116,19 @@ export default function GST_InvoiceManager() {
       setShowForm(false)
       setCurrentInvoiceType(null)
       setActiveTab(invoice.type)
+      await loadInvoices()
+      await loadMonths()
     } catch (error) {
       console.error("Error saving invoice:", error)
       toast({
         title: "Error",
-        description: "Failed to save invoice",
+        description: error instanceof Error ? error.message : "Failed to save invoice",
         variant: "destructive",
       })
     }
   }
 
-  const handleCSVImportComplete = (results: { successful: Invoice[]; failed: any[] }) => {
-    loadInvoices() // Reload data from localStorage
+  const handleCSVImportComplete = async (results: { successful: Invoice[]; failed: { invoice: Invoice; error: string }[] }) => {
     setShowCSVImport(false)
     setCurrentInvoiceType(null)
 
@@ -134,15 +145,8 @@ export default function GST_InvoiceManager() {
       })
     }
 
-    // Switch to appropriate tab
-    const saleImports = results.successful.filter((inv) => inv.type === "sale")
-    const purchaseImports = results.successful.filter((inv) => inv.type === "purchase")
-
-    if (saleImports.length > 0) {
-      setActiveTab("sale")
-    } else if (purchaseImports.length > 0) {
-      setActiveTab("purchase")
-    }
+    await loadInvoices()
+    await loadMonths()
   }
 
   const handleEditInvoice = (invoice: Invoice) => {
@@ -151,27 +155,21 @@ export default function GST_InvoiceManager() {
     setShowForm(true)
   }
 
-  const handleDeleteInvoice = (id: string) => {
+  const handleDeleteInvoice = async (id: string) => {
     try {
-      const currentInvoices = getCurrentInvoices()
-      const invoice = currentInvoices.find((inv) => inv.id === id)
-
+      const invoice = invoices.find((inv) => inv.id === id)
       if (!invoice) return
 
-      const updatedInvoices = currentInvoices.filter((inv) => inv.id !== id)
-      localStorageService.saveInvoices(invoice.type, updatedInvoices)
-
-      if (invoice.type === "sale") {
-        setSaleInvoices(updatedInvoices)
-      } else {
-        setPurchaseInvoices(updatedInvoices)
-      }
+      await apiClient.deleteInvoice(id)
 
       toast({
         title: "Invoice Deleted",
         description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been deleted.`,
         variant: "destructive",
       })
+
+      await loadInvoices()
+      await loadMonths()
     } catch (error) {
       console.error("Error deleting invoice:", error)
       toast({
@@ -182,54 +180,21 @@ export default function GST_InvoiceManager() {
     }
   }
 
-  const handleCancelInvoice = (id: string) => {
+  const handleCancelInvoice = async (id: string) => {
     try {
-      const currentInvoices = getCurrentInvoices()
-      const invoice = currentInvoices.find((inv) => inv.id === id)
-
+      const invoice = invoices.find((inv) => inv.id === id)
       if (!invoice) return
 
-      const cancelledInvoice = {
-        ...invoice,
-        isCancelled: true,
-        cancelledAt: new Date().toISOString(),
-        cancelledReason: "Invoice cancelled by user",
-        basicAmount: 0,
-        totalAmount: 0,
-        gstBreakup: {
-          cgst_14: 0,
-          sgst_14: 0,
-          cgst_9: 0,
-          sgst_9: 0,
-          cgst_6: 0,
-          sgst_6: 0,
-          cgst_2_5: 0,
-          sgst_2_5: 0,
-          cgst_1_5: 0,
-          sgst_1_5: 0,
-          igst_28: 0,
-          igst_18: 0,
-          igst_12: 0,
-          igst_5: 0,
-          igst_3: 0,
-        },
-      }
-
-      const updatedInvoices = currentInvoices.map((inv) => (inv.id === id ? cancelledInvoice : inv))
-
-      localStorageService.saveInvoices(invoice.type, updatedInvoices)
-
-      if (invoice.type === "sale") {
-        setSaleInvoices(updatedInvoices)
-      } else {
-        setPurchaseInvoices(updatedInvoices)
-      }
+      await apiClient.cancelInvoice(id)
 
       toast({
         title: "Invoice Cancelled",
         description: `${invoice.type === "sale" ? "Sale" : "Purchase"} invoice ${invoice.invoiceNo} has been cancelled.`,
         variant: "destructive",
       })
+
+      await loadInvoices()
+      await loadMonths()
     } catch (error) {
       console.error("Error cancelling invoice:", error)
       toast({
@@ -248,10 +213,7 @@ export default function GST_InvoiceManager() {
     setEditingInvoice(null)
   }
 
-  const totalInvoices = saleInvoices.length + purchaseInvoices.length
-  const currentInvoices = getCurrentInvoices()
-
-  if (loading) {
+  if (loading && invoices.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-96">
@@ -295,7 +257,10 @@ export default function GST_InvoiceManager() {
               Import CSV
             </Button>
 
-            <FrontendExport />
+            <FrontendExport
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+            />
           </CardContent>
         </Card>
 
@@ -318,32 +283,40 @@ export default function GST_InvoiceManager() {
             onCancel={handleCancelForm}
             editingInvoice={editingInvoice}
             invoiceType={currentInvoiceType}
-            existingInvoices={currentInvoiceType === "sale" ? saleInvoices : purchaseInvoices}
+            existingInvoices={invoices}
           />
         )}
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation + Month Selector */}
         {!showForm && !showTypeSelector && !showCSVImport && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex space-x-1">
-                  <Button
-                    variant={activeTab === "sale" ? "default" : "outline"}
-                    onClick={() => setActiveTab("sale")}
-                    className="flex items-center gap-2"
-                  >
-                    <Receipt className="h-4 w-4" />
-                    Sale Invoices ({saleInvoices.length})
-                  </Button>
-                  <Button
-                    variant={activeTab === "purchase" ? "default" : "outline"}
-                    onClick={() => setActiveTab("purchase")}
-                    className="flex items-center gap-2"
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                    Purchase Invoices ({purchaseInvoices.length})
-                  </Button>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <MonthSelector
+                    months={months}
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                    onChange={handleMonthChange}
+                  />
+                  <div className="flex space-x-1">
+                    <Button
+                      variant={activeTab === "sale" ? "default" : "outline"}
+                      onClick={() => setActiveTab("sale")}
+                      className="flex items-center gap-2"
+                    >
+                      <Receipt className="h-4 w-4" />
+                      Sale
+                    </Button>
+                    <Button
+                      variant={activeTab === "purchase" ? "default" : "outline"}
+                      onClick={() => setActiveTab("purchase")}
+                      className="flex items-center gap-2"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      Purchase
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -355,7 +328,11 @@ export default function GST_InvoiceManager() {
                     <Upload className="h-4 w-4" />
                     Import CSV
                   </Button>
-                  <FrontendExport invoiceType={activeTab} />
+                  <FrontendExport
+                    invoiceType={activeTab}
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                  />
                   <Button
                     onClick={() => {
                       setCurrentInvoiceType(activeTab)
@@ -376,7 +353,7 @@ export default function GST_InvoiceManager() {
         {/* Invoices Table */}
         {!showForm && !showTypeSelector && !showCSVImport && (
           <InvoiceTable
-            invoices={currentInvoices}
+            invoices={invoices}
             onEdit={handleEditInvoice}
             onDelete={handleDeleteInvoice}
             onCancel={handleCancelInvoice}
@@ -385,51 +362,42 @@ export default function GST_InvoiceManager() {
         )}
 
         {/* Summary */}
-        {!showForm && !showTypeSelector && !showCSVImport && currentInvoices.length > 0 && (
+        {!showForm && !showTypeSelector && !showCSVImport && summary && summary.totalCount > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Summary - {activeTab === "sale" ? "Sale" : "Purchase"} Invoices</CardTitle>
+              <CardTitle>
+                Summary — {activeTab === "sale" ? "Sale" : "Purchase"}
+                {selectedMonth !== null && selectedYear !== null
+                  ? ` (${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][selectedMonth]} ${selectedYear})`
+                  : " (All Months)"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {(() => {
-                const active = currentInvoices.filter((inv) => !inv.isCancelled)
-                const cancelled = currentInvoices.filter((inv) => inv.isCancelled)
-                return (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-                    <div>
-                      <p className="font-medium">Active / Cancelled</p>
-                      <p className="text-2xl font-bold">
-                        {active.length}{" "}
-                        <span className="text-sm font-normal text-gray-500">/ {cancelled.length} cancelled</span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium">Basic Amount</p>
-                      <p className="text-2xl font-bold">
-                        ₹{active.reduce((sum, inv) => sum + inv.basicAmount, 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium">Total Tax</p>
-                      <p className="text-2xl font-bold">
-                        ₹{active.reduce((sum, inv) => sum + (inv.totalAmount - inv.basicAmount), 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium">Total Amount</p>
-                      <p className="text-2xl font-bold text-green-700">
-                        ₹{active.reduce((sum, inv) => sum + inv.totalAmount, 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium">All Invoices</p>
-                      <p className="text-2xl font-bold">
-                        {saleInvoices.length} sale / {purchaseInvoices.length} purchase
-                      </p>
-                    </div>
-                  </div>
-                )
-              })()}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                <div>
+                  <p className="font-medium">Active / Cancelled</p>
+                  <p className="text-2xl font-bold">
+                    {summary.activeCount}{" "}
+                    <span className="text-sm font-normal text-gray-500">/ {summary.cancelledCount} cancelled</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="font-medium">Basic Amount</p>
+                  <p className="text-2xl font-bold">₹{summary.basicAmount.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Total Tax</p>
+                  <p className="text-2xl font-bold">₹{summary.totalTax.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Total Amount</p>
+                  <p className="text-2xl font-bold text-green-700">₹{summary.totalAmount.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="font-medium">Total Invoices</p>
+                  <p className="text-2xl font-bold">{summary.totalCount}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

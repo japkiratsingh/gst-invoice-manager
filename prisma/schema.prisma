@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Invoice {
+  id              String    @id @default(uuid())
+  type            String    // "sale" | "purchase"
+  date            DateTime
+  month           Int       // 1-12, derived from date
+  year            Int       // e.g. 2026, derived from date
+  invoiceNo       String
+  party           String
+  gstNumber       String?
+  basicAmount     Float
+  totalAmount     Float
+  isCancelled     Boolean   @default(false)
+  cancelledAt     DateTime?
+  cancelledReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  items      TaxItem[]
+  gstBreakup GSTBreakup?
+
+  // Unique constraint: invoice number must be unique within a type
+  @@unique([invoiceNo, type])
+  @@index([type, month, year])
+  @@index([type])
+  @@index([month, year])
+}
+
+model TaxItem {
+  id        String @id @default(uuid())
+  invoiceId String
+  amount    Float
+  taxType   String // "CGST_SGST" | "IGST"
+  taxRate   Int    // 28, 18, 12, 5, 3
+  inclusive  Boolean
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model GSTBreakup {
+  id        String @id @default(uuid())
+  invoiceId String @unique
+
+  cgst_14  Float @default(0)
+  sgst_14  Float @default(0)
+  cgst_9   Float @default(0)
+  sgst_9   Float @default(0)
+  cgst_6   Float @default(0)
+  sgst_6   Float @default(0)
+  cgst_2_5 Float @default(0)
+  sgst_2_5 Float @default(0)
+  cgst_1_5 Float @default(0)
+  sgst_1_5 Float @default(0)
+  igst_28  Float @default(0)
+  igst_18  Float @default(0)
+  igst_12  Float @default(0)
+  igst_5   Float @default(0)
+  igst_3   Float @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
